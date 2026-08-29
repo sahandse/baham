@@ -16,7 +16,7 @@ export function JoinForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!myName.trim()) {
       setError("لطفاً اسمت رو وارد کن");
@@ -29,8 +29,8 @@ export function JoinForm() {
     setError("");
     setLoading(true);
     try {
-      const group = joinGroup(code, myName);
-      router.push(`/group/${group.code}`);
+      const group = await joinGroup(code, myName);
+      router.push(`/group?code=${group.code}`);
     } catch (err) {
       setLoading(false);
       setError(err instanceof GroupError ? err.message : "مشکلی پیش اومد، دوباره تلاش کن");
@@ -61,7 +61,7 @@ export function JoinForm() {
       )}
 
       <Button type="submit" size="lg" fullWidth disabled={loading} className="mt-2">
-        ورود به گروه
+        {loading ? "در حال ورود..." : "ورود به گروه"}
       </Button>
     </form>
   );

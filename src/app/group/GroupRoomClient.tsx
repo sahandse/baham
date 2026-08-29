@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button, LinkButton } from "@/components/Button";
 import { Field } from "@/components/Field";
@@ -19,19 +19,68 @@ import {
   leaveGroup,
   setGroupMovie,
   setGroupPlaying,
-  subscribeToGroups,
   type Group,
 } from "@/lib/groupStore";
-import type { CatalogItem } from "@/lib/movies";
+import type { Movie } from "@/lib/movies";
 
-export function GroupRoomClient({ code }: { code: string }) {
-  const group = useSyncExternalStore(
-    subscribeToGroups,
-    () => getGroup(code),
-    () => null
-  );
-  const me = useSyncExternalStore(subscribeToGroups, getMe, () => null);
+const POLL_MS = 3000;
+
+function useGroup(code: string | null) {
+  const [group, setGroup] = useState<Group | null | undefined>(undefined);
+  const [loadError, setLoadError] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!code) return;
+    try {
+      const g = await getGroup(code);
+      setGroup(g);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
+  }, [code]);
+
+  useEffect(() => {
+    if (!code) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function tick() {
+      if (cancelled) return;
+      if (!document.hidden) await refresh();
+      if (!cancelled) timer = setTimeout(tick, POLL_MS);
+    }
+    tick();
+
+    function onVisible() {
+      if (!document.hidden) refresh();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [code, refresh]);
+
+  return { group, setGroup, loadError, refresh };
+}
+
+export function GroupRoomClient() {
+  const searchParams = useSearchParams();
+  const code = searchParams.get("code")?.trim().toUpperCase() || null;
+  const { group, setGroup, loadError } = useGroup(code);
+  const me = typeof window !== "undefined" ? getMe() : null;
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  if (!code) {
+    return <MissingCodeScreen />;
+  }
+
+  if (group === undefined) {
+    return loadError ? <ErrorScreen /> : null;
+  }
 
   if (group === null) {
     return <NotFoundScreen code={code} />;
@@ -40,7 +89,7 @@ export function GroupRoomClient({ code }: { code: string }) {
   const isMember = !!me && group.members.some((m) => m.id === me.id);
 
   if (!isMember) {
-    return <JoinInline code={code} group={group} />;
+    return <JoinInline code={code} group={group} onJoined={setGroup} />;
   }
 
   return (
@@ -67,7 +116,7 @@ export function GroupRoomClient({ code }: { code: string }) {
           <PlayerCard
             movie={group.movie}
             playing={group.playing}
-            onTogglePlay={() => setGroupPlaying(group.code, !group.playing)}
+            onTogglePlay={async () => setGroup(await setGroupPlaying(group.code, !group.playing))}
             onChangeMovie={() => setPickerOpen(true)}
           />
         ) : (
@@ -92,8 +141,8 @@ export function GroupRoomClient({ code }: { code: string }) {
       {pickerOpen && (
         <MoviePicker
           onClose={() => setPickerOpen(false)}
-          onSelect={(item: CatalogItem) => {
-            setGroupMovie(group.code, item);
+          onSelect={async (item: Movie) => {
+            setGroup(await setGroupMovie(group.code, item));
             setPickerOpen(false);
           }}
         />
@@ -138,17 +187,47 @@ function ShareSection({ code }: { code: string }) {
 
 function LeaveButton({ code, memberId }: { code: string; memberId: string }) {
   const router = useRouter();
+  const [leaving, setLeaving] = useState(false);
   return (
     <Button
       variant="danger"
       fullWidth
-      onClick={() => {
-        leaveGroup(code, memberId);
+      disabled={leaving}
+      onClick={async () => {
+        setLeaving(true);
+        await leaveGroup(code, memberId);
         router.push("/");
       }}
     >
-      ترک گروه
+      {leaving ? "در حال خروج..." : "ترک گروه"}
     </Button>
+  );
+}
+
+function MissingCodeScreen() {
+  return (
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+      <span className="text-4xl">🔗</span>
+      <h1 className="text-lg font-bold">کد گروهی مشخص نشده</h1>
+      <p className="text-sm text-muted">از لینک صحیح دعوت استفاده کن یا کد گروه رو دستی وارد کن.</p>
+      <LinkButton href="/join" variant="secondary">
+        ورود با کد
+      </LinkButton>
+      <Link href="/" className="text-sm text-muted underline underline-offset-4">
+        بازگشت به صفحه اصلی
+      </Link>
+    </main>
+  );
+}
+
+function ErrorScreen() {
+  return (
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+      <span className="text-4xl">📡</span>
+      <h1 className="text-lg font-bold">اتصال به سرور برقرار نشد</h1>
+      <p className="text-sm text-muted">اینترنتت رو بررسی کن و دوباره تلاش کن.</p>
+      <Button onClick={() => window.location.reload()}>تلاش دوباره</Button>
+    </main>
   );
 }
 
@@ -168,21 +247,32 @@ function NotFoundScreen({ code }: { code: string }) {
   );
 }
 
-function JoinInline({ code, group }: { code: string; group: Group }) {
+function JoinInline({
+  code,
+  group,
+  onJoined,
+}: {
+  code: string;
+  group: Group;
+  onJoined: (g: Group) => void;
+}) {
   const me = typeof window !== "undefined" ? getMe() : null;
   const [name, setName] = useState(me?.name ?? "");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const isFull = group.members.length >= MAX_MEMBERS;
 
-  function handleJoin(e: React.FormEvent) {
+  async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       setError("لطفاً اسمت رو وارد کن");
       return;
     }
+    setLoading(true);
     try {
-      joinGroup(code, name);
+      onJoined(await joinGroup(code, name));
     } catch (err) {
+      setLoading(false);
       setError(err instanceof GroupError ? err.message : "مشکلی پیش اومد");
     }
   }
@@ -213,8 +303,8 @@ function JoinInline({ code, group }: { code: string; group: Group }) {
             error={error}
             maxLength={20}
           />
-          <Button type="submit" size="lg" fullWidth>
-            پیوستن به گروه
+          <Button type="submit" size="lg" fullWidth disabled={loading}>
+            {loading ? "در حال پیوستن..." : "پیوستن به گروه"}
           </Button>
         </form>
       )}

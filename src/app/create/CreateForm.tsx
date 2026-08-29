@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { Field } from "@/components/Field";
-import { createGroup, getMe } from "@/lib/groupStore";
+import { GroupError, createGroup, getMe } from "@/lib/groupStore";
 
 export function CreateForm() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export function CreateForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!myName.trim()) {
       setError("لطفاً اسمت رو وارد کن");
@@ -23,8 +23,13 @@ export function CreateForm() {
     }
     setError("");
     setLoading(true);
-    const group = createGroup(groupName, myName);
-    router.push(`/group/${group.code}`);
+    try {
+      const group = await createGroup(groupName, myName);
+      router.push(`/group?code=${group.code}`);
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof GroupError ? err.message : "مشکلی پیش اومد، دوباره تلاش کن");
+    }
   }
 
   return (
@@ -50,7 +55,7 @@ export function CreateForm() {
       </div>
 
       <Button type="submit" size="lg" fullWidth disabled={loading} className="mt-2">
-        ساخت گروه
+        {loading ? "در حال ساخت..." : "ساخت گروه"}
       </Button>
     </form>
   );
