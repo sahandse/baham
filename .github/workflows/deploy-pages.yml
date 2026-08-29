@@ -2,7 +2,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # "main" for once the repo has a real default branch; the claude/* branch
+    # is included too since that's currently this repo's only/default branch.
+    branches: [main, claude/group-watch-platform-fzsp7u]
     paths:
       - "src/**"
       - "public/**"
