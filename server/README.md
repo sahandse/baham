@@ -31,11 +31,19 @@ npm run dev        # روی PORT=4000 بالا میاد
 
 ### گزینه ۱ — Render (ساده‌ترین)
 
+**راه سریع (Blueprint):** یک `render.yaml` توی ریشه‌ی ریپو هست. توی داشبورد Render: **New + → Blueprint** → این ریپو رو وصل کن. Render خودش سرویس + دیسک رو طبق `render.yaml` می‌سازه؛ فقط باید بعدش متغیر `ALLOWED_ORIGINS` رو دستی به آدرس GitHub Pages‌ت ست کنی (چون `sync: false` گذاشته شده، عمداً از قبل ست نمی‌شه).
+
+> `render.yaml` روی پلن `starter` تنظیم شده چون دیسک دائمی (برای اینکه دیتابیس SQLite بین ری‌استارت‌ها پاک نشه) روی پلن رایگان Render پشتیبانی نمی‌شه. اگه می‌خوای رایگان بمونی، بخش `disk:` رو از `render.yaml` حذف کن — فقط دیتابیس با هر ری‌استارت/دیپلوی پاک می‌شه.
+
+**راه دستی:**
+
 1. یک سرویس جدید از نوع **Web Service** بساز و این ریپو رو وصل کن، Root Directory را `server` بذار.
 2. Build Command: `npm install && npm run build`
 3. Start Command: `npm start`
 4. یک **Persistent Disk** (مثلاً ۱GB) به مسیر `/opt/render/project/src/data` وصل کن و `DATA_DIR` رو به همون مسیر ست کن (وگرنه با هر دیپلوی، دیتابیس پاک می‌شه).
 5. متغیر محیطی `ALLOWED_ORIGINS` رو به آدرس GitHub Pages ست کن، مثلاً: `https://<username>.github.io`
+
+**راه گفتگویی:** اگه کانکتور رسمی Render رو توی تنظیمات claude.ai به این حساب وصل و توی همین چت فعال کنی، می‌تونم مستقیم از همینجا سرویس رو طبق همین `render.yaml` بسازم و دیپلوی کنم — بدون این مراحل دستی.
 
 ### گزینه ۲ — Docker (روی هر VPS)
 

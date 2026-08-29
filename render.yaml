@@ -1,0 +1,32 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# One-click setup: on Render, go to New + → Blueprint, connect this repo,
+# and Render creates the web service + persistent disk below automatically.
+#
+# Note: a persistent disk (needed so the SQLite database survives restarts
+# and redeploys) requires a paid instance type — "starter" here. If you want
+# to stay on the free tier instead, remove the `disk:` block; the database
+# will then reset on every redeploy/restart, which is fine for trying things
+# out but not for real use.
+services:
+  - type: web
+    name: baham-server
+    runtime: node
+    rootDir: server
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    disk:
+      name: baham-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
+      - key: PORT
+        value: "4000"
+      - key: ALLOWED_ORIGINS
+        # Set this after you know your GitHub Pages URL, e.g.
+        # https://<username>.github.io
+        sync: false
